@@ -8,6 +8,10 @@ import torch
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizerBase
 
+# Imports for run_parse_mmlu_response
+import re
+from typing import Any
+
 
 def get_packed_sft_dataset(
     tokenizer: PreTrainedTokenizerBase,
@@ -85,7 +89,23 @@ def run_parse_mmlu_response(
         str (one of "A", "B", "C", or "D") if the model output can be parsed into a prediction,
         else None.
     """
-    raise NotImplementedError
+    # Normalize the model output
+    model_output = model_output.strip().upper()
+
+    # Try to extract answer letter directly from common patterns
+    match = re.search(r"\b([ABCD])\b", model_output)
+    if match:
+        return match.group(1)
+    
+    # If model output includes the full answer, try matching it
+    options = mmlu_example["options"]
+    for idx, option in enumerate(options):
+        option_clean = re.escape(option.strip().upper())
+        # Match as full word/phrase, not substring
+        if re.search(rf"\b{option_clean}\b", model_output):
+            return chr(ord("A") + idx)
+        
+    return None
 
 
 def run_parse_gsm8k_response(
