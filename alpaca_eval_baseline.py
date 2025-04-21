@@ -4,13 +4,15 @@ import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
+import requests
+from pathlib import Path
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate zero-shot outputs on AlpacaEval using Qwen2.5-0.5B")
-    parser.add_argument("--input_file", type=str, default="alpaca_eval_instructions.json", 
-                        help="Path to the AlpacaEval dataset")
+    parser.add_argument("--input_file", type=str, default=None, 
+                        help="Path to the AlpacaEval dataset (if not provided, will download automatically)")
     parser.add_argument("--output_file", type=str, default="qwen2.5_0.5b_predictions.json", 
-                        help="Path to save model predictions")
+                        help="Filename to save model predictions")
     parser.add_argument("--output_dir", type=str, default="./", 
                         help="Directory to save model predictions")
     parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-0.5B", 
@@ -34,8 +36,36 @@ def load_model_and_tokenizer(model_name):
     )
     return model, tokenizer
 
-def load_eval_set(input_file):
+def download_alpaca_eval_data():
+    """Download the AlpacaEval dataset if it doesn't exist."""
+    data_dir = Path("alpaca_eval_data")
+    data_dir.mkdir(exist_ok=True)
+    
+    data_file = data_dir / "alpaca_eval_instructions.json"
+    
+    if not data_file.exists():
+        print("Downloading AlpacaEval dataset...")
+        # URL for the AlpacaEval dataset
+        url = "https://raw.githubusercontent.com/tatsu-lab/alpaca_eval/main/alpaca_eval/data/alpaca_eval.json"
+        
+        # Download the file
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(data_file, "w", encoding="utf-8") as f:
+                f.write(response.text)
+            print(f"Dataset downloaded to {data_file}")
+        else:
+            raise Exception(f"Failed to download dataset: status code {response.status_code}")
+    else:
+        print(f"Using existing dataset at {data_file}")
+    
+    return str(data_file)
+
+def load_eval_set(input_file=None):
     """Load the AlpacaEval dataset."""
+    if input_file is None or not os.path.exists(input_file):
+        input_file = download_alpaca_eval_data()
+    
     print(f"Loading evaluation set from: {input_file}")
     with open(input_file, "r", encoding="utf-8") as f:
         eval_set = json.load(f)
