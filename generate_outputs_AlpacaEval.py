@@ -1,0 +1,100 @@
+import json
+import argparse
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from tqdm import tqdm
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate zero-shot outputs on AlpacaEval using Qwen2.5-0.5B")
+    parser.add_argument("--input_file", type=str, default="alpaca_eval_instructions.json", 
+                        help="Path to the AlpacaEval dataset")
+    parser.add_argument("--output_file", type=str, default="qwen2.5_0.5b_predictions.json", 
+                        help="Path to save model predictions")
+    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-0.5B", 
+                        help="Hugging Face model name")
+    parser.add_argument("--batch_size", type=int, default=1, 
+                        help="Batch size for generation")
+    parser.add_argument("--max_new_tokens", type=int, default=512, 
+                        help="Maximum number of tokens to generate")
+    parser.add_argument("--generator_name", type=str, default="qwen2.5-0.5b-base", 
+                        help="Name identifier for the generator model")
+    return parser.parse_args()
+
+def load_model_and_tokenizer(model_name):
+    """Load model and tokenizer from HuggingFace."""
+    print(f"Loading model and tokenizer: {model_name}")
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name, 
+        torch_dtype=torch.float16, 
+        device_map="auto"
+    )
+    return model, tokenizer
+
+def load_eval_set(input_file):
+    """Load the AlpacaEval dataset."""
+    print(f"Loading evaluation set from: {input_file}")
+    with open(input_file, "r", encoding="utf-8") as f:
+        eval_set = json.load(f)
+    return eval_set
+
+def generate_outputs(model, tokenizer, eval_set, args):
+    """Generate outputs for each instruction in the evaluation set."""
+    results = []
+    
+    for example in tqdm(eval_set, desc="Generating outputs"):
+        instruction = example["instruction"]
+        
+        # Prepare input for the model
+        inputs = tokenizer(instruction, return_tensors="pt").to(model.device)
+        
+        # Generate with greedy decoding
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=args.max_new_tokens,
+                temperature=0.0,
+                top_p=1.0,
+                do_sample=False
+            )
+        
+        # Decode the output and extract only the generated part
+        full_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # The output might include the instruction, so we need to extract just the generated part
+        # This is a simple approach; you might need to adjust based on the specific model's behavior
+        generated_text = full_output[len(instruction):].strip()
+        
+        # Create result entry
+        result = {
+            "instruction": instruction,
+            "output": generated_text,
+            "generator": args.generator_name,
+            "dataset": example.get("dataset", "")  # Use empty string if dataset field is not available
+        }
+        
+        results.append(result)
+    
+    return results
+
+def main():
+    args = parse_args()
+    
+    # Load model and tokenizer
+    model, tokenizer = load_model_and_tokenizer(args.model_name)
+    
+    # Load evaluation set
+    eval_set = load_eval_set(args.input_file)
+    
+    # Generate outputs
+    results = generate_outputs(model, tokenizer, eval_set, args)
+    
+    # Save results
+    print(f"Saving {len(results)} predictions to: {args.output_file}")
+    with open(args.output_file, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    
+    print("Done!")
+
+if __name__ == "__main__":
+    main()
