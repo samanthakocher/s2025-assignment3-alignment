@@ -1,5 +1,6 @@
 import json
 import argparse
+import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
@@ -10,6 +11,8 @@ def parse_args():
                         help="Path to the AlpacaEval dataset")
     parser.add_argument("--output_file", type=str, default="qwen2.5_0.5b_predictions.json", 
                         help="Path to save model predictions")
+    parser.add_argument("--output_dir", type=str, default="./", 
+                        help="Directory to save model predictions")
     parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-0.5B", 
                         help="Hugging Face model name")
     parser.add_argument("--batch_size", type=int, default=1, 
@@ -62,7 +65,6 @@ def generate_outputs(model, tokenizer, eval_set, args):
         full_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
         
         # The output might include the instruction, so we need to extract just the generated part
-        # This is a simple approach; you might need to adjust based on the specific model's behavior
         generated_text = full_output[len(instruction):].strip()
         
         # Create result entry
@@ -80,6 +82,12 @@ def generate_outputs(model, tokenizer, eval_set, args):
 def main():
     args = parse_args()
     
+    # Create output directory if it doesn't exist
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Determine the full output file path
+    output_file_path = os.path.join(args.output_dir, args.output_file)
+    
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(args.model_name)
     
@@ -90,8 +98,8 @@ def main():
     results = generate_outputs(model, tokenizer, eval_set, args)
     
     # Save results
-    print(f"Saving {len(results)} predictions to: {args.output_file}")
-    with open(args.output_file, "w", encoding="utf-8") as f:
+    print(f"Saving {len(results)} predictions to: {output_file_path}")
+    with open(output_file_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     
     print("Done!")
