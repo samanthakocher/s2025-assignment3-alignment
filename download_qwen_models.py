@@ -4,6 +4,8 @@ import argparse
 import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from datasets import load_dataset
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate Qwen2.5 models on AlpacaEval zero-shot")
@@ -27,12 +29,8 @@ def parse_args():
                         help="Top-p sampling parameter")
     return parser.parse_args()
 
-def load_alpaca_data(data_path):
-    """Load AlpacaEval instructions from JSON file."""
-    with open(data_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    print(f"Loaded {len(data)} examples from AlpacaEval dataset")
-    return data
+def load_alpaca_data():
+    return load_dataset("tatsu-lab/alpaca_eval", split="eval")
 
 def format_prompt(instruction, model_name):
     """Format the prompt according to model type (base or instruct)."""
