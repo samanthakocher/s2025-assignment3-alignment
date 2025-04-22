@@ -111,7 +111,7 @@ def main():
     )
     
     # Load AlpacaEval data
-    print(f"Loading AlpacaEval data from {args.alpaca_data}")
+    # print(f"Loading AlpacaEval data from {args.alpaca_data}")
     eval_set = load_alpaca_data()
     
     # Generate responses
