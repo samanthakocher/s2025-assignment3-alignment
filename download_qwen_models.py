@@ -9,8 +9,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate Qwen2.5 models on AlpacaEval zero-shot")
     parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-0.5B",
                         help="Model to evaluate (e.g., Qwen/Qwen2.5-0.5B or Qwen/Qwen2.5-3B-Instruct)")
-    parser.add_argument("--alpaca_data", type=str, default="./data/alpaca_eval_instructions.json",
-                        help="Path to AlpacaEval instructions JSON file")
+    # parser.add_argument("--alpaca_data", type=str, default="./data/alpaca_eval_instructions.json",
+    #                     help="Path to AlpacaEval instructions JSON file")
     parser.add_argument("--output_path", type=str, default="./results/qwen_predictions.json",
                         help="Path to save model predictions")
     parser.add_argument("--batch_size", type=int, default=1,
@@ -112,7 +112,7 @@ def main():
     
     # Load AlpacaEval data
     print(f"Loading AlpacaEval data from {args.alpaca_data}")
-    eval_set = load_alpaca_data(args.alpaca_data)
+    eval_set = load_alpaca_data()
     
     # Generate responses
     print(f"Generating responses using {args.model_name}...")
