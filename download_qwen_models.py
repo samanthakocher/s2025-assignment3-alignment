@@ -32,8 +32,8 @@ def parse_args():
 def load_alpaca_data():
     return load_dataset(
         "tatsu-lab/alpaca_eval",
-        split="eval",
-        download_mode="reuse_dataset_if_exists"
+        split="eval[:100]",
+        download_mode="reuse_dataset_if_exists",
         )
 
 def format_prompt(instruction, model_name):
