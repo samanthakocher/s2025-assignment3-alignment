@@ -91,8 +91,9 @@ def generate_responses(model, tokenizer, eval_set, args):
 def save_results(results, output_path):
     """Save results in the required format for AlpacaEval."""
     # Create output directory if it doesn't exist
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
+    if not isinstance(results, list):
+        results = [dict(r) for r in results]  # works for datasets.Dataset
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
     
