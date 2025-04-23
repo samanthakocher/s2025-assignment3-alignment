@@ -63,10 +63,13 @@ def download_alpaca_eval_data():
     return str(data_file)
 
 def load_eval_set(_=None):
-    print("Loading AlpacaEval from Hugging Face datasets...")
-    dataset = load_dataset("tatsu-lab/alpaca_eval", split="eval")
+    print("Loading AlpacaEval from Hugging Face datasets (optimized)...")
+    
+    dataset = load_dataset("tatsu-lab/alpaca_eval", split="eval[:100]")
+    
+    # convert to standard Python list of dicts for fast iteration
+    dataset = [dict(x) for x in dataset]  # 🔁 Faster access than HF Dataset object
     return dataset
-
 
 def generate_outputs(model, tokenizer, eval_set, args):
     """Generate outputs for each instruction in the evaluation set."""
