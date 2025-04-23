@@ -30,7 +30,11 @@ def parse_args():
     return parser.parse_args()
 
 def load_alpaca_data():
-    return load_dataset("tatsu-lab/alpaca_eval", split="eval")
+    return load_dataset(
+        "tatsu-lab/alpaca_eval",
+        split="eval",
+        download_mode="reuse_dataset_if_exists"
+        )
 
 def format_prompt(instruction, model_name):
     """Format the prompt according to model type (base or instruct)."""
