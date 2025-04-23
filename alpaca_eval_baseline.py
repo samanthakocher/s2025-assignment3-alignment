@@ -6,6 +6,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 import requests
 from pathlib import Path
+from datasets import load_dataset
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate zero-shot outputs on AlpacaEval using Qwen2.5-0.5B")
@@ -61,15 +62,11 @@ def download_alpaca_eval_data():
     
     return str(data_file)
 
-def load_eval_set(input_file=None):
-    """Load the AlpacaEval dataset."""
-    if input_file is None or not os.path.exists(input_file):
-        input_file = download_alpaca_eval_data()
-    
-    print(f"Loading evaluation set from: {input_file}")
-    with open(input_file, "r", encoding="utf-8") as f:
-        eval_set = json.load(f)
-    return eval_set
+def load_eval_set(_=None):
+    print("Loading AlpacaEval from Hugging Face datasets...")
+    dataset = load_dataset("tatsu-lab/alpaca_eval", split="eval")
+    return dataset
+
 
 def generate_outputs(model, tokenizer, eval_set, args):
     """Generate outputs for each instruction in the evaluation set."""
