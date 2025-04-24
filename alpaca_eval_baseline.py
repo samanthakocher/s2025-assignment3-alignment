@@ -27,15 +27,11 @@ def parse_args():
     return parser.parse_args()
 
 def load_model_and_tokenizer(model_name):
-    """Load model and tokenizer from HuggingFace."""
     print(f"Loading model and tokenizer: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name, 
-        torch_dtype=torch.float16, 
-        device_map="auto"
-    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
+    model = AutoModelForCausalLM.from_pretrained(model_name, local_files_only=True)
     return model, tokenizer
+
 
 def download_alpaca_eval_data():
     """Download the AlpacaEval dataset if it doesn't exist."""

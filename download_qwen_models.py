@@ -112,6 +112,12 @@ def main():
         device_map=args.device,
         trust_remote_code=True
     )
+
+    # Save model and tokenizer locally
+    local_dir = "./Qwen2_5_0_5B"
+    print(f"Saving model to {local_dir}")
+    model.save_pretrained(local_dir)
+    tokenizer.save_pretrained(local_dir)
     
     # Load AlpacaEval data
     # print(f"Loading AlpacaEval data from {args.alpaca_data}")
