@@ -115,7 +115,9 @@ def main():
     )
 
     # Save model and tokenizer locally
-    local_dir = "./Qwen2_5_0_5B"
+    # Make a clean folder name from the model name
+    local_dir = args.model_name.replace("/", "_").replace(".", "_")
+    local_dir = f"./{local_dir}"
     print(f"Saving model to {local_dir}")
     model.save_pretrained(local_dir)
     tokenizer.save_pretrained(local_dir)
