@@ -13,6 +13,10 @@ from transformers import PreTrainedTokenizerBase
 import re
 from typing import Any
 
+# Imports for get_packed_sft_dataset
+import random
+import math
+
 
 def get_packed_sft_dataset(
     tokenizer: PreTrainedTokenizerBase,
@@ -84,10 +88,7 @@ def get_packed_sft_dataset(
             self.seq_length = seq_length
             
             # Calculate number of complete sequences
-            self.num_sequences = len(self.token_ids) // self.seq_length
-            
-            # Trim to a multiple of seq_length
-            self.token_ids = self.token_ids[:self.num_sequences * self.seq_length]
+            self.num_sequences = math.ceil(len(self.token_ids) / self.seq_length)
         
         def __len__(self):
             return self.num_sequences
@@ -100,6 +101,11 @@ def get_packed_sft_dataset(
             end_idx = start_idx + self.seq_length
             
             sequence = self.token_ids[start_idx:end_idx]
+
+            # If the sequence is too short, pad it
+            if len(sequence) < self.seq_length:
+                pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+                sequence = sequence + [pad_token_id] * (self.seq_length - len(sequence))
             
             # For causal language modeling, input_ids and labels are the same
             return {
