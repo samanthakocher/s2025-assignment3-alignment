@@ -65,12 +65,11 @@ def get_packed_sft_dataset(
             instruction = example[instruction_key]
             response = example[response_key]
             
-            # Format the example for instruction tuning
-            # Add special tokens and format according to the expected pattern
-            formatted_text = f"{tokenizer.bos_token if tokenizer.bos_token else ''}{instruction}{tokenizer.eos_token if tokenizer.eos_token else ''}{response}{tokenizer.eos_token if tokenizer.eos_token else ''}"
-            
-            # Encode the text to token IDs
-            token_ids = tokenizer.encode(formatted_text, add_special_tokens=False)  # Special tokens already added
+            # Build: [BOS] + instruction_ids + [EOS] + response_ids + [EOS]
+            bos_id = [tokenizer.bos_token_id] if tokenizer.bos_token_id is not None else []
+            eos_id = [tokenizer.eos_token_id] if tokenizer.eos_token_id is not None else []
+
+            token_ids = bos_id + instruction_ids + eos_id + response_ids + eos_id
             examples.append(token_ids)
     
     # Shuffle examples if specified
