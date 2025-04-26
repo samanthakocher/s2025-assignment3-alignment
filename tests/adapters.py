@@ -40,7 +40,73 @@ def get_packed_sft_dataset(
         "input_ids" contains the token IDs for the language modeling inputs, and "labels" contains
         the token IDs for the language modeling labels.
     """
-    raise NotImplementedError
+    # Read and tokenize all examples into a flat list of token IDs
+    all_token_ids = []
+
+    # Check if the file is gzipped
+    is_gzipped = str(dataset_path).endswith('.gz')
+    open_func = gzip.open if is_gzipped else open
+    mode = 'rt' if is_gzipped else 'r'
+
+    with open_func(dataset_path, mode) as f:
+        examples = []
+        for line in f:
+            example = json.loads(line)
+            
+            # Check for the right keys (could be instruction/response or prompt/completion)
+            instruction_key = "instruction" if "instruction" in example else "prompt"
+            response_key = "response" if "response" in example else "completion"
+            
+            instruction = example[instruction_key]
+            response = example[response_key]
+            
+            # Format the example for instruction tuning
+            # Add special tokens and format according to the expected pattern
+            formatted_text = f"{tokenizer.bos_token if tokenizer.bos_token else ''}{instruction}{tokenizer.eos_token if tokenizer.eos_token else ''}{response}{tokenizer.eos_token if tokenizer.eos_token else ''}"
+            
+            # Encode the text to token IDs
+            token_ids = tokenizer.encode(formatted_text, add_special_tokens=False)  # Special tokens already added
+            examples.append(token_ids)
+    
+    # Shuffle examples if specified
+    if shuffle:
+        random.shuffle(examples)
+    
+    # Flatten all examples into a single list of token IDs
+    for example in examples:
+        all_token_ids.extend(example)
+    
+    # Create a custom dataset class
+    class PackedDataset(Dataset):
+        def __init__(self, token_ids, seq_length):
+            self.token_ids = token_ids
+            self.seq_length = seq_length
+            
+            # Calculate number of complete sequences
+            self.num_sequences = len(self.token_ids) // self.seq_length
+            
+            # Trim to a multiple of seq_length
+            self.token_ids = self.token_ids[:self.num_sequences * self.seq_length]
+        
+        def __len__(self):
+            return self.num_sequences
+        
+        def __getitem__(self, idx):
+            if idx >= len(self):
+                raise IndexError(f"Index {idx} out of bounds for dataset of length {len(self)}")
+            
+            start_idx = idx * self.seq_length
+            end_idx = start_idx + self.seq_length
+            
+            sequence = self.token_ids[start_idx:end_idx]
+            
+            # For causal language modeling, input_ids and labels are the same
+            return {
+                "input_ids": torch.tensor(sequence, dtype=torch.long),
+                "labels": torch.tensor(sequence, dtype=torch.long),
+            }
+    
+    return PackedDataset(all_token_ids, seq_length)
 
 
 def run_iterate_batches(
@@ -63,7 +129,18 @@ def run_iterate_batches(
     Returns:
         Iterable over batches, where each batch has size `batch_size`.
     """
-    raise NotImplementedError
+    # Use DataLoader to handle batching
+    from torch.utils.data import DataLoader
+    
+    # Create a DataLoader with the specified parameters
+    data_loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        drop_last=False  # Include partial batches at the end
+    )
+    
+    return data_loader
 
 
 def run_parse_mmlu_response(
