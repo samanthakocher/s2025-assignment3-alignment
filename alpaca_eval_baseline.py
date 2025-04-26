@@ -29,9 +29,18 @@ def parse_args():
 
 def load_model_and_tokenizer(model_name):
     print(f"Loading model and tokenizer: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
-    model = AutoModelForCausalLM.from_pretrained(model_name, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name, 
+        local_files_only=True,
+        trust_remote_code=True  # <--- Add this
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name, 
+        local_files_only=True,
+        trust_remote_code=True  # <--- Add this
+    )
     return model, tokenizer
+
 
 def load_eval_set(_=None):
     print("Loading AlpacaEval from Hugging Face datasets (optimized)...")
