@@ -59,6 +59,10 @@ def load_eval_set(_=None):
 def generate_outputs(model, tokenizer, eval_set, args):
     """Generate outputs for each instruction in the evaluation set."""
     results = []
+
+    if args.max_samples is not None:
+        eval_set = eval_set[:args.max_samples]
+
     
     for example in tqdm(eval_set, desc="Generating outputs"):
         instruction = example["instruction"]
