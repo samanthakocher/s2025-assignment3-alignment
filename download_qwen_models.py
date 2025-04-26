@@ -30,11 +30,12 @@ def parse_args():
     return parser.parse_args()
 
 def load_alpaca_data():
-    return load_dataset(
-        "tatsu-lab/alpaca_eval",
-        split="eval[:100]",
-        download_mode="reuse_dataset_if_exists",
-        )
+    eval_path = "data/alpaca_eval/alpaca_eval.jsonl"
+    data = []
+    with open(eval_path, "r", encoding="utf-8") as f:
+        for line in f:
+            data.append(json.loads(line))
+    return data
 
 def format_prompt(instruction, model_name):
     """Format the prompt according to model type (base or instruct)."""
