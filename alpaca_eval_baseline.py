@@ -60,12 +60,13 @@ def download_alpaca_eval_data():
 
 def load_eval_set(_=None):
     print("Loading AlpacaEval from Hugging Face datasets (optimized)...")
-    
-    dataset = load_dataset("tatsu-lab/alpaca_eval", split="eval[:100]")
-    
-    # convert to standard Python list of dicts for fast iteration
-    dataset = [dict(x) for x in dataset]  # 🔁 Faster access than HF Dataset object
-    return dataset
+    eval_path = "data/alpaca_eval/alpaca_eval.jsonl"
+    data = []
+    with open(eval_path, "r", encoding="utf-8") as f:
+        for line in f:
+            data.append(json.loads(line))
+    return data
+
 
 def generate_outputs(model, tokenizer, eval_set, args):
     """Generate outputs for each instruction in the evaluation set."""
@@ -115,7 +116,7 @@ def main():
     output_file_path = os.path.join(args.output_dir, args.output_file)
     
     # Load model and tokenizer
-    model, tokenizer = load_model_and_tokenizer(args.model_name)
+    model, tokenizer = load_model_and_tokenizer("./Qwen_Qwen2_5_0_5B")
     
     # Load evaluation set
     eval_set = load_eval_set(args.input_file)
@@ -139,8 +140,8 @@ def main():
     gpt4_lookup = {x["instruction"]: x["output"] for x in gpt4_outputs}
 
     # Load Qwen2.5-3B-Instruct annotator
-    annotator_model = AutoModelForCausalLM.from_pretrained("./Qwen2.5-3B-Instruct", local_files_only=True).to("cuda")
-    annotator_tokenizer = AutoTokenizer.from_pretrained("./Qwen2.5-3B-Instruct", local_files_only=True)
+    annotator_model = AutoModelForCausalLM.from_pretrained("./Qwen_Qwen2_5_3B_Instruct", local_files_only=True).to("cuda")
+    annotator_tokenizer = AutoTokenizer.from_pretrained("./Qwen_Qwen2_5_3B_Instruct", local_files_only=True)
 
     def judge_response(prompt, model_output, gpt4_output):
         """Use Qwen2.5-3B-Instruct to choose between model and GPT-4 Turbo."""
