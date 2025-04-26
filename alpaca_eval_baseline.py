@@ -7,6 +7,7 @@ from tqdm import tqdm
 import requests
 from pathlib import Path
 from datasets import load_dataset
+import random
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate zero-shot outputs on AlpacaEval using Qwen2.5-0.5B")
@@ -31,32 +32,6 @@ def load_model_and_tokenizer(model_name):
     tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
     model = AutoModelForCausalLM.from_pretrained(model_name, local_files_only=True)
     return model, tokenizer
-
-
-def download_alpaca_eval_data():
-    """Download the AlpacaEval dataset if it doesn't exist."""
-    data_dir = Path("alpaca_eval_data")
-    data_dir.mkdir(exist_ok=True)
-    
-    data_file = data_dir / "alpaca_eval_instructions.json"
-    
-    if not data_file.exists():
-        print("Downloading AlpacaEval dataset...")
-        # URL for the AlpacaEval dataset
-        url = "https://raw.githubusercontent.com/tatsu-lab/alpaca_eval/main/alpaca_eval/data/alpaca_eval.json"
-        
-        # Download the file
-        response = requests.get(url)
-        if response.status_code == 200:
-            with open(data_file, "w", encoding="utf-8") as f:
-                f.write(response.text)
-            print(f"Dataset downloaded to {data_file}")
-        else:
-            raise Exception(f"Failed to download dataset: status code {response.status_code}")
-    else:
-        print(f"Using existing dataset at {data_file}")
-    
-    return str(data_file)
 
 def load_eval_set(_=None):
     print("Loading AlpacaEval from Hugging Face datasets (optimized)...")
@@ -128,60 +103,6 @@ def main():
     print(f"Saving {len(results)} predictions to: {output_file_path}")
     with open(output_file_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
-
-    print("\n=== Evaluating Winrate against GPT-4 Turbo using Qwen2.5-3B-Instruct as annotator ===")
-
-    # Load GPT-4 Turbo reference outputs
-    gpt4_path = "alpaca_eval/data/gpt4_turbo_outputs.json"
-    assert os.path.exists(gpt4_path), "Missing GPT-4 Turbo reference outputs."
-
-    with open(gpt4_path) as f:
-        gpt4_outputs = json.load(f)
-    gpt4_lookup = {x["instruction"]: x["output"] for x in gpt4_outputs}
-
-    # Load Qwen2.5-3B-Instruct annotator
-    annotator_model = AutoModelForCausalLM.from_pretrained("./Qwen_Qwen2_5_3B_Instruct", local_files_only=True).to("cuda")
-    annotator_tokenizer = AutoTokenizer.from_pretrained("./Qwen_Qwen2_5_3B_Instruct", local_files_only=True)
-
-    def judge_response(prompt, model_output, gpt4_output):
-        """Use Qwen2.5-3B-Instruct to choose between model and GPT-4 Turbo."""
-        comparison_prompt = (
-            f"Instruction: {prompt}\n\n"
-            f"Response A: {model_output}\n\n"
-            f"Response B: {gpt4_output}\n\n"
-            f"Which response is better? Answer A or B."
-        )
-
-        inputs = annotator_tokenizer(comparison_prompt, return_tensors="pt").to("cuda")
-        with torch.no_grad():
-            out = annotator_model.generate(**inputs, max_new_tokens=10)
-        decoded = annotator_tokenizer.decode(out[0], skip_special_tokens=True)
-        return "A" if "A" in decoded else "B"
-
-    wins = 0
-    total = 0
-    length_matched_wins = 0
-
-    for result in tqdm(results, desc="Judging outputs"):
-        instruction = result["instruction"]
-        model_output = result["output"]
-        gpt4_output = gpt4_lookup.get(instruction)
-        if not gpt4_output:
-            continue
-
-        decision = judge_response(instruction, model_output, gpt4_output)
-        if decision == "A":
-            wins += 1
-            if len(model_output) <= len(gpt4_output) * 1.1:  # <=10% longer
-                length_matched_wins += 1
-        total += 1
-
-    # Final report
-    winrate = 100 * wins / total
-    length_winrate = 100 * length_matched_wins / total
-    print(f"\nWinrate: {winrate:.2f}%")
-    print(f"Length-controlled winrate: {length_winrate:.2f}%")
-
 
     print("Done!")
 
