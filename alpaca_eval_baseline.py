@@ -27,17 +27,18 @@ def parse_args():
                         help="Name identifier for the generator model")
     return parser.parse_args()
 
-def load_model_and_tokenizer(model_name):
-    print(f"Loading model and tokenizer: {model_name}")
+def load_model_and_tokenizer(model_path):
+    print(f"Loading model and tokenizer from local path: {model_path}")
+
     tokenizer = AutoTokenizer.from_pretrained(
-        model_name, 
-        local_files_only=True,
-        trust_remote_code=True  # <--- Add this
+        pretrained_model_name_or_path=model_path,
+        trust_remote_code=True,
+        local_files_only=True
     )
     model = AutoModelForCausalLM.from_pretrained(
-        model_name, 
-        local_files_only=True,
-        trust_remote_code=True  # <--- Add this
+        pretrained_model_name_or_path=model_path,
+        trust_remote_code=True,
+        local_files_only=True
     )
     return model, tokenizer
 
@@ -100,7 +101,7 @@ def main():
     output_file_path = os.path.join(args.output_dir, args.output_file)
     
     # Load model and tokenizer
-    model, tokenizer = load_model_and_tokenizer("./Qwen_Qwen2_5_0_5B")
+    model, tokenizer = load_model_and_tokenizer(args.model_name)
     
     # Load evaluation set
     eval_set = load_eval_set(args.input_file)
