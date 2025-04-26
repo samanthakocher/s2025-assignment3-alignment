@@ -25,6 +25,9 @@ def parse_args():
                         help="Maximum number of tokens to generate")
     parser.add_argument("--generator_name", type=str, default="qwen2.5-0.5b-base", 
                         help="Name identifier for the generator model")
+    parser.add_argument("--max_samples", type=int, default=None,
+                    help="Maximum number of samples to evaluate (for debugging)")
+
     return parser.parse_args()
 
 def load_model_and_tokenizer(model_path):
