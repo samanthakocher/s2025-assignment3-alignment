@@ -89,6 +89,8 @@ def get_packed_sft_dataset(
         tensor = torch.tensor(sequence, dtype=torch.long)
         packed_data.append({"input_ids": tensor, "labels": tensor.clone()})
     
+    packed_data = packed_data[:75]
+
     return SimpleMapDataset(packed_data)
 
 def run_iterate_batches(
