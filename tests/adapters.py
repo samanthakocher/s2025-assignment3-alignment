@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from transformers import PreTrainedTokenizerBase
 
 # Imports for run_parse_mmlu_response
@@ -15,7 +15,7 @@ from typing import Any
 
 # Imports for get_packed_sft_dataset
 import random
-import math
+
 
 
 def get_packed_sft_dataset(
@@ -45,75 +45,46 @@ def get_packed_sft_dataset(
         "input_ids" contains the token IDs for the language modeling inputs, and "labels" contains
         the token IDs for the language modeling labels.
     """
-    # Read and tokenize all examples into a flat list of token IDs
-    all_token_ids = []
-
-    # Check if the file is gzipped
-    is_gzipped = str(dataset_path).endswith('.gz')
-    open_func = gzip.open if is_gzipped else open
-    mode = 'rt' if is_gzipped else 'r'
-
-    with open_func(dataset_path, mode) as f:
-        examples = []
-        for line in f:
-            example = json.loads(line)
-            
-            # Check for the right keys (could be instruction/response or prompt/completion)
-            instruction_key = "instruction" if "instruction" in example else "prompt"
-            response_key = "response" if "response" in example else "completion"
-            
-            instruction = example[instruction_key]
-            response = example[response_key]
-            
-            # Build: [BOS] + instruction_ids + [EOS] + response_ids + [EOS]
-            bos_id = [tokenizer.bos_token_id] if tokenizer.bos_token_id is not None else []
-            eos_id = [tokenizer.eos_token_id] if tokenizer.eos_token_id is not None else []
-
-            token_ids = bos_id + instruction_ids + eos_id + response_ids + eos_id
-            examples.append(token_ids)
-    
-    # Shuffle examples if specified
-    if shuffle:
-        random.shuffle(examples)
-    
-    # Flatten all examples into a single list of token IDs
-    for example in examples:
-        all_token_ids.extend(example)
-    
-    # Create a custom dataset class
-    class PackedDataset(Dataset):
-        def __init__(self, token_ids, seq_length):
-            self.token_ids = token_ids
-            self.seq_length = seq_length
-            
-            # Calculate number of complete sequences
-            self.num_sequences = math.ceil(len(self.token_ids) / self.seq_length)
+# Simple minimal dataset definition
+    class SimpleMapDataset(Dataset):
+        def __init__(self, data_list):
+            self.data = data_list
         
         def __len__(self):
-            return self.num_sequences
+            return len(self.data)
         
         def __getitem__(self, idx):
-            if idx >= len(self):
-                raise IndexError(f"Index {idx} out of bounds for dataset of length {len(self)}")
-            
-            start_idx = idx * self.seq_length
-            end_idx = start_idx + self.seq_length
-            
-            sequence = self.token_ids[start_idx:end_idx]
-
-            # If the sequence is too short, pad it
-            if len(sequence) < self.seq_length:
-                pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
-                sequence = sequence + [pad_token_id] * (self.seq_length - len(sequence))
-            
-            # For causal language modeling, input_ids and labels are the same
-            return {
-                "input_ids": torch.tensor(sequence, dtype=torch.long),
-                "labels": torch.tensor(sequence, dtype=torch.long),
-            }
+            return self.data[idx]
     
-    return PackedDataset(all_token_ids, seq_length)
-
+    # Load the dataset
+    with open(dataset_path, 'r', encoding='utf-8') as f:
+        data = [json.loads(line) for line in f]
+    
+    if shuffle:
+        random.shuffle(data)
+    
+    # Tokenize all examples
+    all_token_ids = []
+    
+    for example in data:
+        if "instruction" in example and "response" in example:
+            instruction = example["instruction"]
+            response = example["response"]
+            
+            # Format for Qwen2.5 models
+            formatted_text = f"<|im_start|>user\n{instruction}<|im_end|>\n<|im_start|>assistant\n{response}<|im_end|>"
+            
+            tokens = tokenizer.encode(formatted_text)
+            all_token_ids.extend(tokens)
+    
+    # Pack the tokens into fixed-length sequences
+    packed_data = []
+    for i in range(0, len(all_token_ids) - seq_length, seq_length):
+        sequence = all_token_ids[i:i + seq_length]
+        tensor = torch.tensor(sequence, dtype=torch.long)
+        packed_data.append({"input_ids": tensor, "labels": tensor.clone()})
+    
+    return SimpleMapDataset(packed_data)
 
 def run_iterate_batches(
     dataset: Dataset,
@@ -135,19 +106,11 @@ def run_iterate_batches(
     Returns:
         Iterable over batches, where each batch has size `batch_size`.
     """
-    # Use DataLoader to handle batching
-    from torch.utils.data import DataLoader
-    
-    # Create a DataLoader with the specified parameters
-    data_loader = DataLoader(
+    return DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
-        drop_last=False  # Include partial batches at the end
+        shuffle=shuffle
     )
-    
-    return data_loader
-
 
 def run_parse_mmlu_response(
     mmlu_example: dict[str, Any],
