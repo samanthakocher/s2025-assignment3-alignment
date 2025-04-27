@@ -79,12 +79,13 @@ def get_packed_sft_dataset(
             all_token_ids.extend(tokens)
     
     # Pack the tokens into fixed-length sequences
-    usable_length = (len(all_token_ids) // seq_length) * seq_length
-    usable_token_ids = all_token_ids[:usable_length]
-
     packed_data = []
-    for i in range(0, usable_length, seq_length):
-        sequence = usable_token_ids[i:i + seq_length]
+    total_sequences = len(all_token_ids) // seq_length
+
+    for i in range(total_sequences):
+        start = i * seq_length
+        end = start + seq_length
+        sequence = all_token_ids[start:end]
         tensor = torch.tensor(sequence, dtype=torch.long)
         packed_data.append({"input_ids": tensor, "labels": tensor.clone()})
     
