@@ -72,7 +72,7 @@ def get_packed_sft_dataset(
             response = example["response"]
             
             # Format for instruction tuning
-            formatted_text = f"<|im_start|>user\n{instruction}<|im_end|>\n<|im_start|>assistant\n{response}<|im_end|>"
+            formatted_text = f"{instruction}\n{response}"
             
             # Important fix: Append to all_token_ids instead of extend
             tokens = tokenizer.encode(formatted_text)
