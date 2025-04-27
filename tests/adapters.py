@@ -67,9 +67,9 @@ def get_packed_sft_dataset(
     all_token_ids = []
     
     for example in data:
-        if "prompt" in example and "completion" in example:
+        if "prompt" in example and "response" in example:
             instruction = example["prompt"]
-            response = example["completion"]
+            response = example["response"]
             
             # Format for instruction tuning
             formatted_text = f"<|im_start|>user\n{instruction}<|im_end|>\n<|im_start|>assistant\n{response}<|im_end|>"
