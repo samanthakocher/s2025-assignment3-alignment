@@ -45,7 +45,7 @@ def get_packed_sft_dataset(
         "input_ids" contains the token IDs for the language modeling inputs, and "labels" contains
         the token IDs for the language modeling labels.
     """
-# Simple minimal dataset definition
+    # Simple minimal dataset definition
     class SimpleMapDataset(Dataset):
         def __init__(self, data_list):
             self.data = data_list
@@ -71,20 +71,22 @@ def get_packed_sft_dataset(
             instruction = example["instruction"]
             response = example["response"]
             
-            # Format for Qwen2.5 models
+            # Format for instruction tuning
             formatted_text = f"<|im_start|>user\n{instruction}<|im_end|>\n<|im_start|>assistant\n{response}<|im_end|>"
             
+            # Important fix: Append to all_token_ids instead of extend
             tokens = tokenizer.encode(formatted_text)
             all_token_ids.extend(tokens)
     
     # Pack the tokens into fixed-length sequences
     packed_data = []
-    for i in range(0, len(all_token_ids) - seq_length, seq_length):
+    # Key fix: Use a step size of seq_length
+    for i in range(0, len(all_token_ids) - seq_length + 1, seq_length):
         sequence = all_token_ids[i:i + seq_length]
         tensor = torch.tensor(sequence, dtype=torch.long)
         packed_data.append({"input_ids": tensor, "labels": tensor.clone()})
     
-    return SimpleMapDataset(packed_data)
+    return SimpleMapDataset(packed_data))
 
 def run_iterate_batches(
     dataset: Dataset,
