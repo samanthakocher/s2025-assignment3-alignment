@@ -7,6 +7,7 @@ from typing import Any
 
 import torch
 from torch.utils.data import Dataset, DataLoader
+import torch.nn.functional as F
 from transformers import PreTrainedTokenizerBase
 
 # Imports for run_parse_mmlu_response
@@ -216,4 +217,128 @@ def compute_per_instance_dpo_loss(
     Returns:
         torch.Tensor with the DPO loss for this example.
     """
-    raise NotImplementedError
+    # Format inputs using Alpaca template
+    def format_alpaca(instruction, response=None):
+        formatted = f"Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{instruction}\n\n### Response:"
+        if response:
+            formatted += f" {response}<|endoftext|>"
+        return formatted
+    
+    # Format the full sequences (prompt + response)
+    prompt_only = format_alpaca(prompt)
+    chosen_full = format_alpaca(prompt, response_chosen)
+    rejected_full = format_alpaca(prompt, response_rejected)
+    
+    # Tokenize all inputs
+    inputs_prompt = tokenizer(prompt_only, return_tensors="pt")
+    inputs_chosen = tokenizer(chosen_full, return_tensors="pt")
+    inputs_rejected = tokenizer(rejected_full, return_tensors="pt")
+    
+    # Move to the same device as the model
+    device = next(lm.parameters()).device
+    inputs_prompt = {k: v.to(device) for k, v in inputs_prompt.items()}
+    inputs_chosen = {k: v.to(device) for k, v in inputs_chosen.items()}
+    inputs_rejected = {k: v.to(device) for k, v in inputs_rejected.items()}
+    
+    # Get the length of the prompt to identify the start of the responses
+    prompt_length = inputs_prompt['input_ids'].size(1)
+    
+    # Compute log probs for chosen response
+    with torch.no_grad():
+        # Policy model
+        outputs_chosen_policy = lm(
+            input_ids=inputs_chosen['input_ids'],
+            attention_mask=inputs_chosen['attention_mask'],
+            return_dict=True
+        )
+        logits_chosen_policy = outputs_chosen_policy.logits[:, :-1]  # Shift left for next token prediction
+        
+        # Reference model
+        outputs_chosen_ref = lm_ref(
+            input_ids=inputs_chosen['input_ids'],
+            attention_mask=inputs_chosen['attention_mask'],
+            return_dict=True
+        )
+        logits_chosen_ref = outputs_chosen_ref.logits[:, :-1]  # Shift left for next token prediction
+        
+        # Create log probabilities
+        log_probs_chosen_policy = F.log_softmax(logits_chosen_policy, dim=-1)
+        log_probs_chosen_ref = F.log_softmax(logits_chosen_ref, dim=-1)
+        
+        # Gather the log probs for the actual next tokens
+        next_tokens_chosen = inputs_chosen['input_ids'][:, 1:]  # Shift right for actual next tokens
+        gathered_log_probs_chosen_policy = torch.gather(
+            log_probs_chosen_policy, 
+            dim=-1, 
+            index=next_tokens_chosen.unsqueeze(-1)
+        ).squeeze(-1)
+        gathered_log_probs_chosen_ref = torch.gather(
+            log_probs_chosen_ref, 
+            dim=-1, 
+            index=next_tokens_chosen.unsqueeze(-1)
+        ).squeeze(-1)
+        
+        # Create a mask that selects only the response tokens (after prompt)
+        response_mask_chosen = torch.zeros_like(gathered_log_probs_chosen_policy)
+        response_mask_chosen[:, prompt_length-1:] = 1  # -1 because of the shifted indices
+        
+        # Policy model logs for chosen
+        chosen_response_log_probs_policy = (gathered_log_probs_chosen_policy * response_mask_chosen).sum() / response_mask_chosen.sum()
+        
+        # Reference model logs for chosen
+        chosen_response_log_probs_ref = (gathered_log_probs_chosen_ref * response_mask_chosen).sum() / response_mask_chosen.sum()
+        
+    # Compute log probs for rejected response
+    with torch.no_grad():
+        # Policy model
+        outputs_rejected_policy = lm(
+            input_ids=inputs_rejected['input_ids'],
+            attention_mask=inputs_rejected['attention_mask'],
+            return_dict=True
+        )
+        logits_rejected_policy = outputs_rejected_policy.logits[:, :-1]  # Shift left for next token prediction
+        
+        # Reference model
+        outputs_rejected_ref = lm_ref(
+            input_ids=inputs_rejected['input_ids'],
+            attention_mask=inputs_rejected['attention_mask'],
+            return_dict=True
+        )
+        logits_rejected_ref = outputs_rejected_ref.logits[:, :-1]  # Shift left for next token prediction
+        
+        # Create log probabilities
+        log_probs_rejected_policy = F.log_softmax(logits_rejected_policy, dim=-1)
+        log_probs_rejected_ref = F.log_softmax(logits_rejected_ref, dim=-1)
+        
+        # Gather the log probs for the actual next tokens
+        next_tokens_rejected = inputs_rejected['input_ids'][:, 1:]  # Shift right for actual next tokens
+        gathered_log_probs_rejected_policy = torch.gather(
+            log_probs_rejected_policy, 
+            dim=-1, 
+            index=next_tokens_rejected.unsqueeze(-1)
+        ).squeeze(-1)
+        gathered_log_probs_rejected_ref = torch.gather(
+            log_probs_rejected_ref, 
+            dim=-1, 
+            index=next_tokens_rejected.unsqueeze(-1)
+        ).squeeze(-1)
+        
+        # Create a mask that selects only the response tokens (after prompt)
+        response_mask_rejected = torch.zeros_like(gathered_log_probs_rejected_policy)
+        response_mask_rejected[:, prompt_length-1:] = 1  # -1 because of the shifted indices
+        
+        # Policy model logs for rejected
+        rejected_response_log_probs_policy = (gathered_log_probs_rejected_policy * response_mask_rejected).sum() / response_mask_rejected.sum()
+        
+        # Reference model logs for rejected
+        rejected_response_log_probs_ref = (gathered_log_probs_rejected_ref * response_mask_rejected).sum() / response_mask_rejected.sum()
+    
+    # Calculate log ratios
+    chosen_log_ratio = chosen_response_log_probs_policy - chosen_response_log_probs_ref
+    rejected_log_ratio = rejected_response_log_probs_policy - rejected_response_log_probs_ref
+    
+    # Compute the DPO loss: -log(sigmoid(β * (r_w - r_l)))
+    # where r_w = log_ratio for chosen and r_l = log_ratio for rejected
+    dpo_loss = -torch.log(torch.sigmoid(beta * (chosen_log_ratio - rejected_log_ratio)))
+    
+    return dpo_loss
